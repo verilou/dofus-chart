@@ -4,7 +4,6 @@ import { getAttributePriceInt } from "../services/getAttribute.js";
 const { Item, NewPrice } = db;
 
 export const getPrices = () => {
-  console.log("HERE");
   connect({
     headless: false,
     fingerprint: true, // Injects a unique fingerprint ID into the page
@@ -95,7 +94,6 @@ export const getPrices = () => {
         itemAnkamaPrice.ankamaId = itemAnkamaPrice.id;
         delete itemAnkamaPrice.id;
         itemAnkamaPrice.itemId = item.id;
-        console.log(itemAnkamaPrice);
         NewPrice.create(itemAnkamaPrice);
         return itemAnkamaPrice;
       });

@@ -2,7 +2,7 @@ import { CronJob } from "cron";
 import { getPrices } from "./services/getPrices.js";
 
 const job = new CronJob(
-  "*/15 * * * *", // cronTime every minutes
+  "*/15 * * * *", // cronTime every minute 15 of each hour
   async () => {
     await getPrices();
   }, // onTick
