@@ -5,7 +5,7 @@ const { Item, NewPrice } = db;
 
 export const getPrices = () => {
   connect({
-    headless: false,
+    headless: true,
     fingerprint: true, // Injects a unique fingerprint ID into the page
     turnstile: true, // Automatically clicks on Captchas
     tf: true, // Use targ
@@ -97,7 +97,7 @@ export const getPrices = () => {
         NewPrice.create(itemAnkamaPrice);
         return itemAnkamaPrice;
       });
-
+      console.log("prices inserted")
       await browser.close();
     } catch (error) {
       console.log(error);
