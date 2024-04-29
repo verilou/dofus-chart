@@ -8,9 +8,9 @@ export default {
     logging: false,
   },
   production: {
-    username: "postgres",
+    username: "metabase",
     password: process.env.DB_PASSWORD,
-    database: "dofus_chart_dev",
+    database: "dofus_chart_prod",
     host: "127.0.0.1",
     dialect: "postgresql",
     logging: false,
