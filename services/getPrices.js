@@ -5,7 +5,7 @@ const { Item, NewPrice } = db;
 
 export const getPrices = () => {
   connect({
-    headless: true,
+    headless: "auto",
     fingerprint: true, // Injects a unique fingerprint ID into the page
     turnstile: true, // Automatically clicks on Captchas
     tf: true, // Use targ
@@ -23,14 +23,15 @@ export const getPrices = () => {
       setTarget({ status: true });
 
       await page2.goto(
-        "https://www.vulbis.com/?server=Draconiros&gids=&percent=150&craftableonly=true&select-type=1&sellchoice=false&buyqty=1&sellqty=1&percentsell=0",
+        "https://www.vulbis.com/?server=Draconiros&gids=&percent=0&craftableonly=false&select-type=-1&sellchoice=false&buyqty=1&sellqty=1&percentsell=0",
         {
           waitUntil: "domcontentloaded",
         },
       );
       await page2.exposeFunction("getAttributePriceInt", getAttributePriceInt);
-      await page2.waitForSelector(".odd");
-      await page2.waitForSelector(".even");
+      await page2.waitForSelector(".odd", { timeout: 60000 });
+      await page2.waitForSelector(".even", { timeout: 60000 });
+      // await page2.select(`select[name="scanTable_length"]`, "-1");
       const listOfItem = await page2.$$("#scanTable .odd, #scanTable .even");
       const itemAnkamaPrices = await Promise.all(
         listOfItem.map(async (itemRow) => {
@@ -42,6 +43,27 @@ export const getPrices = () => {
             const name = p.innerText;
             return { id, name };
           });
+
+          const lastPriceInDb = NewPrice.findOne({
+            include: {
+              model: Item,
+              where: { ankamId: id },
+              order: ["createdAt", "DESC"],
+            },
+            attributes: ["createdAt"],
+          });
+          const lastVulbisUpdate = await itemRow.$eval(
+            "td:nth-child(4)",
+            getAttributePriceInt,
+          );
+
+          if (
+            lastPriceInDb !== null &&
+            parseInt(lastVulbisUpdate) >
+              parseInt((lastPriceInDb.createdAt.getTime() / 1000).toFixed(0))
+          ) {
+            return undefined;
+          }
 
           const price = await itemRow.$eval(
             "td:nth-child(6)",
@@ -97,7 +119,7 @@ export const getPrices = () => {
         NewPrice.create(itemAnkamaPrice);
         return itemAnkamaPrice;
       });
-      console.log("prices inserted")
+      console.log("prices inserted");
       await browser.close();
     } catch (error) {
       console.log(error);
