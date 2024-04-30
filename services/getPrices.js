@@ -33,66 +33,70 @@ export const getPrices = () => {
       await page2.waitForSelector(".even", { timeout: 60000 });
       // await page2.select(`select[name="scanTable_length"]`, "-1");
       const listOfItem = await page2.$$("#scanTable .odd, #scanTable .even");
-      const itemAnkamaPrices = await Promise.all(
-        listOfItem.map(async (itemRow) => {
-          const { id, name } = await itemRow.$eval("p", (p) => {
-            const onClickAttribute = p.getAttribute("onclick").substring(22);
-            const id = parseInt(
-              onClickAttribute.substring(0, onClickAttribute.length - 9),
+
+      const itemAnkamaPrices = (
+        await Promise.all(
+          listOfItem.map(async (itemRow) => {
+            const { id, name } = await itemRow.$eval("p", (p) => {
+              const onClickAttribute = p.getAttribute("onclick").substring(22);
+              const id = parseInt(
+                onClickAttribute.substring(0, onClickAttribute.length - 9),
+              );
+              const name = p.innerText;
+              return { id, name };
+            });
+
+            const lastPriceInDb = await NewPrice.findOne({
+              include: {
+                model: Item,
+                where: { ankamId: id },
+                required: true,
+              },
+              order: [["id", "DESC"]],
+              attributes: ["createdAt"],
+            });
+
+            const lastVulbisUpdate = await itemRow.$eval(
+              "td:nth-child(4)",
+              getAttributePriceInt,
             );
-            const name = p.innerText;
-            return { id, name };
-          });
 
-          const lastPriceInDb = NewPrice.findOne({
-            include: {
-              model: Item,
-              where: { ankamId: id },
-              order: ["createdAt", "DESC"],
-            },
-            attributes: ["createdAt"],
-          });
-          const lastVulbisUpdate = await itemRow.$eval(
-            "td:nth-child(4)",
-            getAttributePriceInt,
-          );
+            const price = await itemRow.$eval(
+              "td:nth-child(6)",
+              getAttributePriceInt,
+            );
 
-          if (
-            lastPriceInDb !== null &&
-            parseInt(lastVulbisUpdate) >
-              parseInt((lastPriceInDb.createdAt.getTime() / 1000).toFixed(0))
-          ) {
-            return undefined;
-          }
+            const priceBySetOfTen = await itemRow.$eval(
+              "td:nth-child(7)",
+              getAttributePriceInt,
+            );
+            const priceBySetOfHundred = await itemRow.$eval(
+              "td:nth-child(8)",
+              getAttributePriceInt,
+            );
 
-          const price = await itemRow.$eval(
-            "td:nth-child(6)",
-            getAttributePriceInt,
-          );
-
-          const priceBySetOfTen = await itemRow.$eval(
-            "td:nth-child(7)",
-            getAttributePriceInt,
-          );
-          const priceBySetOfHundred = await itemRow.$eval(
-            "td:nth-child(8)",
-            getAttributePriceInt,
-          );
-
-          const capitalGain = await itemRow.$eval(
-            "td:nth-child(11)",
-            getAttributePriceInt,
-          );
-          return {
-            id,
-            name,
-            price,
-            priceBySetOfTen,
-            priceBySetOfHundred,
-            capitalGain,
-          };
-        }),
-      );
+            const capitalGain = await itemRow.$eval(
+              "td:nth-child(11)",
+              getAttributePriceInt,
+            );
+            return {
+              id,
+              name,
+              price,
+              priceBySetOfTen,
+              priceBySetOfHundred,
+              capitalGain,
+              lastPriceInDb: lastPriceInDb?.createdAt,
+              lastVulbisUpdate,
+            };
+          }),
+        )
+      ).filter(({ lastPriceInDb, lastVulbisUpdate }) => {
+        return (
+          parseInt(lastVulbisUpdate) >
+          parseInt((lastPriceInDb?.getTime() / 1000).toFixed(0))
+        );
+      });
 
       const itemIdsAndNames = itemAnkamaPrices.map(({ id, name }) => ({
         id,
@@ -109,13 +113,15 @@ export const getPrices = () => {
         }),
       );
 
-      const insertedPrices = itemAnkamaPrices.map((itemAnkamaPrice) => {
+      itemAnkamaPrices.map((itemAnkamaPrice) => {
         const item = items.find((item) => {
           return item.ankamId === itemAnkamaPrice.id;
         });
-        itemAnkamaPrice.ankamaId = itemAnkamaPrice.id;
         delete itemAnkamaPrice.id;
         itemAnkamaPrice.itemId = item.id;
+        console.log(
+          `[NewPrice created] ${item.name} with a new price of ${itemAnkamaPrice.price}`,
+        );
         NewPrice.create(itemAnkamaPrice);
         return itemAnkamaPrice;
       });
