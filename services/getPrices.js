@@ -1,6 +1,7 @@
+import { parse } from "node-html-parser";
 import { connect } from "puppeteer-real-browser";
 import db from "../models/index.js";
-import { getAttributePriceInt } from "../services/getAttribute.js";
+import getScan from "./getScan.js";
 const { Item, NewPrice } = db;
 
 export const getPrices = () => {
@@ -28,24 +29,31 @@ export const getPrices = () => {
           waitUntil: "domcontentloaded",
         },
       );
-      await page2.exposeFunction("getAttributePriceInt", getAttributePriceInt);
-      await page2.waitForSelector(".odd", { timeout: 60000 });
-      await page2.waitForSelector(".even", { timeout: 60000 });
-      // await page2.select(`select[name="scanTable_length"]`, "-1");
-      const listOfItem = await page2.$$("#scanTable .odd, #scanTable .even");
 
+      await page2.waitForSelector(".odd");
+
+      const cookies = await page2.cookies();
+      const cf_clearance = cookies.find(
+        (cookie) => cookie.name === "cf_clearance",
+      );
+
+      const response = await getScan(cf_clearance);
+      browser.close();
+      const root = parse(response.data);
       const itemAnkamaPrices = (
         await Promise.all(
-          listOfItem.map(async (itemRow) => {
-            const { id, name } = await itemRow.$eval("p", (p) => {
-              const onClickAttribute = p.getAttribute("onclick").substring(22);
-              const id = parseInt(
-                onClickAttribute.substring(0, onClickAttribute.length - 9),
-              );
-              const name = p.innerText;
-              return { id, name };
-            });
+          root.querySelectorAll("tbody > tr").map(async (row) => {
+            const onClickAttribute = row
+              .querySelector("p")
+              .getAttribute("onclick");
 
+            const onClickAttributeSliced = onClickAttribute.substring(22);
+            const id = parseInt(
+              onClickAttributeSliced.substring(
+                0,
+                onClickAttributeSliced.length - 9,
+              ),
+            );
             const lastPriceInDb = await NewPrice.findOne({
               include: {
                 model: Item,
@@ -55,29 +63,22 @@ export const getPrices = () => {
               order: [["id", "DESC"]],
               attributes: ["createdAt"],
             });
-
-            const lastVulbisUpdate = await itemRow.$eval(
-              "td:nth-child(4)",
-              getAttributePriceInt,
+            const name = row.querySelector("p").text;
+            const lastVulbisUpdate = parseInt(
+              row.querySelector("td:nth-child(4)").getAttribute("data-order"),
+            );
+            const price = parseInt(
+              row.querySelector("td:nth-child(6)").getAttribute("data-order"),
             );
 
-            const price = await itemRow.$eval(
-              "td:nth-child(6)",
-              getAttributePriceInt,
+            const priceBySetOfTen = parseInt(
+              row.querySelector("td:nth-child(7)").getAttribute("data-order"),
             );
-
-            const priceBySetOfTen = await itemRow.$eval(
-              "td:nth-child(7)",
-              getAttributePriceInt,
+            const priceBySetOfHundred = parseInt(
+              row.querySelector("td:nth-child(8)").getAttribute("data-order"),
             );
-            const priceBySetOfHundred = await itemRow.$eval(
-              "td:nth-child(8)",
-              getAttributePriceInt,
-            );
-
-            const capitalGain = await itemRow.$eval(
-              "td:nth-child(11)",
-              getAttributePriceInt,
+            const capitalGain = parseInt(
+              row.querySelector("td:nth-child(11)").getAttribute("data-order"),
             );
             return {
               id,
@@ -86,12 +87,16 @@ export const getPrices = () => {
               priceBySetOfTen,
               priceBySetOfHundred,
               capitalGain,
-              lastPriceInDb: lastPriceInDb?.createdAt,
               lastVulbisUpdate,
+              lastPriceInDb: lastPriceInDb?.createdAt,
             };
           }),
         )
       ).filter(({ lastPriceInDb, lastVulbisUpdate }) => {
+        if (lastPriceInDb === undefined) {
+          return true;
+        }
+
         return (
           parseInt(lastVulbisUpdate) >
           parseInt((lastPriceInDb?.getTime() / 1000).toFixed(0))
@@ -126,10 +131,8 @@ export const getPrices = () => {
         return itemAnkamaPrice;
       });
       console.log("prices inserted");
-      await browser.close();
     } catch (error) {
       console.log(error);
-      await browser.close();
     }
   });
 };
