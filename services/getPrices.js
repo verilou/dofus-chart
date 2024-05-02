@@ -1,7 +1,6 @@
 import { parse } from "node-html-parser";
 import { connect } from "puppeteer-real-browser";
 import db from "../models/index.js";
-import getScan from "./getScan.js";
 const { Item, NewPrice } = db;
 
 export const getPrices = () => {
@@ -11,35 +10,42 @@ export const getPrices = () => {
     turnstile: true, // Automatically clicks on Captchas
     tf: true, // Use targ
   }).then(async (response) => {
-    const { page, browser, setTarget } = response;
+    const { page, browser } = response;
     try {
-      page.goto("https://www.vulbis.com/", {
-        waitUntil: "domcontentloaded",
+      await page._client().send("Network.enable", {
+        maxResourceBufferSize: 1024 * 1204 * 50,
+        maxTotalBufferSize: 1024 * 1204 * 100,
       });
-
-      setTarget({ status: false });
-
-      let page2 = await browser.newPage();
-
-      setTarget({ status: true });
-
-      await page2.goto(
+      await page.goto(
         "https://www.vulbis.com/?server=Draconiros&gids=&percent=0&craftableonly=false&select-type=-1&sellchoice=false&buyqty=1&sellqty=1&percentsell=0",
         {
           waitUntil: "domcontentloaded",
         },
       );
 
-      await page2.waitForSelector(".odd");
+      await page.setRequestInterception(true);
+      page.on("request", (request) => {
+        if (request.resourceType() === "image") {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
 
-      const cookies = await page2.cookies();
-      const cf_clearance = cookies.find(
-        (cookie) => cookie.name === "cf_clearance",
-      );
+      const getScanResponse = () =>
+        new Promise((resolve, reject) => {
+          page.on("response", (interceptedResponse) => {
+            if (interceptedResponse.url().includes("scan.php")) {
+              resolve(interceptedResponse);
+            }
+          });
+        });
 
-      const response = await getScan(cf_clearance);
+      const scan = await getScanResponse();
+
+      const root = parse(await scan.text());
       browser.close();
-      const root = parse(response.data);
+
       const itemAnkamaPrices = (
         await Promise.all(
           root.querySelectorAll("tbody > tr").map(async (row) => {
