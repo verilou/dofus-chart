@@ -44,7 +44,7 @@ export const getPrices = () => {
       const scan = await getScanResponse();
 
       const root = parse(await scan.text());
-      browser.close();
+      await browser.close();
 
       const itemAnkamaPrices = (
         await Promise.all(
@@ -123,20 +123,21 @@ export const getPrices = () => {
           )[0];
         }),
       );
-
+      let count = 0;
       itemAnkamaPrices.map((itemAnkamaPrice) => {
         const item = items.find((item) => {
           return item.ankamId === itemAnkamaPrice.id;
         });
         delete itemAnkamaPrice.id;
         itemAnkamaPrice.itemId = item.id;
-        console.log(
-          `[NewPrice created] ${item.name} with a new price of ${itemAnkamaPrice.price}`,
-        );
+        // console.log(
+        //   `[NewPrice created] ${item.name} with a new price of ${itemAnkamaPrice.price}`,
+        // );
         NewPrice.create(itemAnkamaPrice);
+        count++;
         return itemAnkamaPrice;
       });
-      console.log("prices inserted");
+      console.log(`prices inserted ${count}`);
     } catch (error) {
       console.log(error);
     }
