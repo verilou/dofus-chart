@@ -37,7 +37,7 @@ Pour utiliser ce projet, suivez les étapes ci-dessous :
 
 6. Accédez à Metabase pour visualiser les données :
     - Configurez Metabase avec votre base de données.
-        - `run un container Metabase avec docker run -d -p 3000:3000 --name metabase metabase/metabase `
+        - `docker run -d -p 3000:3000 --name metabase metabase/metabase `
     - Créez des dashboards et des graphiques selon vos besoins.
 
 ## Configuration
